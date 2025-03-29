@@ -15,7 +15,15 @@
 !*.json
 !.gitignore
 !*.pdf
-
+!*.obj
+!*.mtl
+!*.3ds
+!*.blend
+!*.tif
+!*.tif
+!*.jpg
+!*.png
+!*.svg
 # 忽略特定文件
 CMakeUserPresets.json
 
