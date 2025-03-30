@@ -207,13 +207,45 @@ Eigen::Vector3f displacement_fragment_shader(const fragment_shader_payload &payl
     // Vector ln = (-dU, -dV, 1)
     // Position p = p + kn * n * h(u,v)
     // Normal n = normalize(TBN * ln)
+    auto x = normal.x();
+    auto y = normal.y();
+    auto z = normal.z();
 
+    Eigen::Vector3f t(x * y / sqrt(x * x + z * z), sqrt(x * x + z * z), z * y / sqrt(x * x + z * z));
+    Eigen::Vector3f b = normal.cross(t);
+    Eigen::Matrix3f TBN;
+    TBN << t.x(), b.x(), normal.x(),
+        t.y(), b.y(), normal.y(),
+        t.z(), b.z(), normal.z();
+
+    auto u = payload.tex_coords.x();
+    auto v = payload.tex_coords.y();
+    auto w = payload.texture->width;
+    auto h = payload.texture->height;
+
+    auto dU = kh * kn * (payload.texture->getColor(u + 1.0f / w, v).norm() - payload.texture->getColor(u, v).norm());
+    auto dV = kh * kn * (payload.texture->getColor(u, v + 1.0f / h).norm() - payload.texture->getColor(u, v).norm());
+
+    Eigen::Vector3f ln{-dU, -dV, 1.0f};
+    point += (kn * normal * payload.texture->getColor(u, v).norm());
+    normal = TBN * ln;
+    // Eigen::Vector3f result_color = normal.normalized();
     Eigen::Vector3f result_color = {0, 0, 0};
 
     for (auto &light : lights)
     {
         // TODO: For each light source in the code, calculate what the *ambient*, *diffuse*, and *specular*
         // components are. Then, accumulate that result on the *result_color* object.
+        auto v = eye_pos - point;
+        auto l = light.position - point;
+        auto h = (v + l).normalized();
+        auto r2 = l.dot(l); // 计算衰减因子（光源到物体距离的平方）=|l||l|cos0°=l^2//仔细看前面的式子，结果就是距离的平方
+
+        Eigen::Vector3f la = ka.cwiseProduct(amb_light_intensity); // 逐个元素求乘积，通常拿来加权
+        Eigen::Vector3f ld = kd.cwiseProduct(light.intensity / r2) * std::max(0.0f, normal.normalized().dot(l.normalized()));
+        Eigen::Vector3f ls = ks.cwiseProduct(light.intensity / r2) * std::pow(std::max(0.0f, normal.normalized().dot(h)), p);
+
+        result_color += la + ld + ls;
     }
 
     return result_color * 255.f;
@@ -314,7 +346,8 @@ int main(int argc, const char **argv)
     // std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = phong_fragment_shader;
     // std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = normal_fragment_shader;
     // std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = texture_fragment_shader;
-    std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = bump_fragment_shader;
+    // std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = bump_fragment_shader;
+    std::function<Eigen::Vector3f(fragment_shader_payload)> active_shader = displacement_fragment_shader;
     // texture_path = "spot_texture.png";
     r.set_texture(Texture(obj_path + texture_path));
     if (argc >= 2)
